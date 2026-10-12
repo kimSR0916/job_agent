@@ -1,0 +1,25 @@
+{
+  "final_goal": "스포츠 데이터 분석 분야에서 일하기",
+  "preferred_domain": "모터스포츠",
+  "allow_other_sports": true,
+  "domain_keywords": ["motorsport", "motorsports", "formula 1", "formula one", "f1", "racing", "sports", "sport", "football", "basketball", "baseball", "모터스포츠", "스포츠", "축구", "농구", "야구"],
+  "analysis_keywords": ["data analyst", "data scientist", "performance analyst", "race strategy", "telemetry", "analytics", "데이터 분석", "경기 분석", "전략 분석"],
+  "bridge_keywords": ["python", "sql", "backend", "data engineer", "data pipeline", "machine learning", "백엔드", "데이터 엔지니어", "파이프라인"],
+  "competencies": [
+    {"name": "Python과 데이터 처리", "keywords": ["python", "pandas", "numpy", "파이썬"], "checkpoint": "원본 데이터를 정제·집계하는 코드를 직접 설명하고 재현 가능한 실행 방법을 제시할 수 있는지"},
+    {"name": "SQL과 데이터 모델", "keywords": ["sql", "postgresql", "mysql", "sqlite"], "checkpoint": "경기·선수·이벤트 데이터의 관계를 설계하고 분석 쿼리를 설명할 수 있는지"},
+    {"name": "통계와 분석 검증", "keywords": ["statistics", "통계", "회귀", "가설 검정", "hypothesis", "regression"], "checkpoint": "비교 조건·표본 편향·불확실성을 설명하고 결론의 한계를 제시할 수 있는지"},
+    {"name": "시각화와 의사결정 전달", "keywords": ["visualization", "시각화", "dashboard", "대시보드", "plotly", "matplotlib"], "checkpoint": "그래프를 보여주는 데서 끝나지 않고 어떤 판단에 도움이 되는지 설명할 수 있는지"},
+    {"name": "스포츠·모터스포츠 분석 경험", "keywords": ["motorsport", "formula 1", "f1", "telemetry", "스포츠", "모터스포츠", "랩타임", "축구", "농구", "야구"], "checkpoint": "종목의 규칙과 분석 질문을 연결하고 데이터 한계가 포함된 보고서 또는 프로젝트를 제시할 수 있는지"}
+  ],
+  "routes": [
+    {"name": "분석 직무를 통해 스포츠 분석으로", "stages": ["현재 이력서 검토", "주니어 데이터 분석 또는 분석 인턴", "스포츠 데이터 프로젝트·업무 경험", "스포츠 데이터 분석 직무"], "condition": "데이터 처리·통계·분석 보고서의 근거가 있거나 이를 보완할 수 있는 경우 검토", "checkpoint": "데이터 정제부터 결과 해석까지 본인 기여가 드러나는 분석 결과물", "limitation": "일반 기업 분석 경험만으로 종목 지식과 스포츠 현장 경험이 충족되지는 않음"},
+    {"name": "개발 경험을 활용해 스포츠 기술 조직으로", "stages": ["현재 AX 경험 검토", "데이터 업무가 포함된 Python 백엔드·데이터 엔지니어링", "스포츠 데이터 또는 팀 분석 도구 개발", "분석 업무로 역할 확장"], "condition": "분석보다 개발 경험의 근거가 강할 때 검토하되 실제 데이터 업무 비중 확인", "checkpoint": "데이터 수집·품질 관리·분석 사용자와의 협업 경험 및 별도의 분석 결과물", "limitation": "스포츠 기업의 개발자가 됐다는 사실만으로 경기 분석 직무로 이동하는 것은 아님"},
+    {"name": "모터스포츠 경기력·전략 분석으로", "stages": ["데이터 분석 기반 점검", "랩타임·텔레메트리·전략 관련 분석 프로젝트", "적합한 모터스포츠 인턴·주니어 역할 검토", "경기력·전략 분석 업무"], "condition": "관심 업무가 차량 성능인지 경기 전략인지 먼저 구분하고 실제 공고의 학위·공학 요건 확인", "checkpoint": "분석 조건과 한계를 설명하는 재현 가능한 프로젝트 및 목표 직무의 필수 요건 충족", "limitation": "차량 성능 최적화는 차량 동역학 등 공학 지식이 요구될 수 있어 일반 데이터 분석 경로와 분리 검토"}
+  ],
+  "sources": [
+    {"title": "Williams — Performance Optimisation 직무 소개", "url": "https://careers.williamsf1.com/blog/2026-7/exploring-performance-optimisation-jobs", "note": "차량 성능 최적화에 시뮬레이션·트랙 데이터·차량 동역학을 사용하는 사례. 전체 모터스포츠 분석 직무의 공통 요건으로 일반화하지 않음"},
+    {"title": "McLaren — Python Software Engineer", "url": "https://jobs.smartrecruiters.com/McLarenRacingLtd1/744000149419155-python-software-engineer-12-month-ftc", "note": "레이싱 조직의 Python 서비스·API·데이터 파이프라인 업무 사례. 경력직이며 신입 추천 공고가 아님"},
+    {"title": "Stats Perform — 회사 소개", "url": "https://www.statsperform.com/about/", "note": "스포츠 데이터·AI·분석 산업의 예시. 특정 직무의 자격 요건 근거는 아님"}
+  ]
+}

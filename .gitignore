@@ -3,3 +3,5 @@ data/
 secrets/
 __pycache__/
 .venv/
+career-goal.local.json
+resumes/

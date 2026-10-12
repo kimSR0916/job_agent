@@ -10,6 +10,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from career import connection, load_goal
 
 ROOT = Path(__file__).resolve().parent
 
@@ -106,19 +107,28 @@ def notify(job):
     webhook = os.environ.get("DISCORD_WEBHOOK_URL", "")
     if not webhook.startswith("https://discord.com/api/webhooks/"):
         raise RuntimeError(".env에 유효한 DISCORD_WEBHOOK_URL을 설정하세요")
+    career = job.get("career_connection")
+    detail = f"\n목표 연결: {career['category']}\n{career['reason']}" if career else ""
     request_json(webhook + ("&" if "?" in webhook else "?") + "wait=true", {
-        "content": f"새 채용 공고 · {job['company']}\n{job['title']}\n{job['location']}\n{job['url']}"[:1900],
+        "content": f"새 채용 공고 · {job['company']}\n{job['title']}\n{job['location']}\n{job['url']}{detail}"[:1900],
         "allowed_mentions": {"parse": []},
     })
 
 
 def run(config, dry_run):
     found = []
+    goal_file = config.get("career_goal_file")
+    goal_path = ROOT / goal_file if goal_file else None
+    goal = load_goal(goal_path) if goal_path and goal_path.exists() else None
     for source in config["sources"]:
         try:
             found.extend(job for job in collect(source) if matches(job, config))
         except (RuntimeError, ValueError, KeyError, TypeError):
             print(f"수집 실패: {source['provider']} / {source['company']} (다음 실행에서 재시도)", flush=True)
+    if goal:
+        for job in found:
+            job["career_connection"] = connection(job, goal)
+        found.sort(key=lambda job: job["career_connection"]["priority"], reverse=True)
     if dry_run:
         print(json.dumps(found, ensure_ascii=False, indent=2))
         return

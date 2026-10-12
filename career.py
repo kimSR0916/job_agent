@@ -1,0 +1,115 @@
+"""최종 목표와 이력서를 연결하는 경로 초안 및 공고 우선순위.
+
+키워드 기반 첫 버전입니다. 역량 검증, 합격 가능성 예측을 하지 않습니다.
+"""
+import argparse
+import json
+from pathlib import Path
+import re
+
+ROOT = Path(__file__).resolve().parent
+
+
+def keywords(text, words):
+    return [word for word in words if re.search(
+        r"(?<![A-Za-z0-9_])" + re.escape(word) + r"(?![A-Za-z0-9_])" if word.isascii() else re.escape(word),
+        text, flags=re.I)]
+
+
+def load_goal(path):
+    goal = json.loads(path.read_text(encoding="utf-8"))
+    for field in ("final_goal", "preferred_domain"):
+        if not isinstance(goal.get(field), str) or not goal[field].strip():
+            raise ValueError(f"{field}를 입력하세요")
+    for field in ("domain_keywords", "analysis_keywords", "bridge_keywords", "competencies", "routes"):
+        if not isinstance(goal.get(field), list) or not goal[field]:
+            raise ValueError(f"{field} 설정이 필요합니다")
+    return goal
+
+
+def connection(job, goal):
+    text = " ".join(job.get(key, "") for key in ("company", "title", "description"))
+    domain = keywords(text, goal["domain_keywords"])
+    analysis = keywords(text, goal["analysis_keywords"])
+    bridge = keywords(text, goal["bridge_keywords"])
+    if domain and analysis:
+        category, priority = "스포츠 분석 관련 단서", 3
+        reason = "스포츠와 분석 업무의 표현이 함께 있습니다. 실제 경기 분석 업무인지 본문 확인이 필요합니다."
+    elif domain and bridge:
+        category, priority = "스포츠 기술 직무 관련 단서", 2
+        reason = "스포츠 분야의 기술 경험 후보입니다. 분석 직무로 이동 가능한지는 업무 범위 확인이 필요합니다."
+    elif bridge:
+        category, priority = "중간 기술 경험 후보", 1
+        reason = "데이터·개발 관련 표현이 있습니다. 스포츠 분석에 필요한 경험을 쌓을 수 있는지 확인하세요."
+    else:
+        category, priority = "최종 목표 연관 미확인", 0
+        reason = "현재 키워드로는 최종 목표와의 연결 근거를 찾지 못했습니다."
+    return {"category": category, "priority": priority, "reason": reason,
+            "keyword_evidence": {"domain": domain, "analysis": analysis, "bridge": bridge}}
+
+
+def resume_evidence(resume, competencies):
+    results = []
+    for competency in competencies:
+        lines = [line.strip() for line in resume.splitlines()
+                 if keywords(line, competency["keywords"])]
+        results.append({"name": competency["name"], "evidence": lines[:3],
+                        "status": "언급 있음 · 수준 확인 필요" if lines else "이력서에서 미확인",
+                        "checkpoint": competency["checkpoint"]})
+    return results
+
+
+def roadmap(goal, resume=""):
+    evidence = resume_evidence(resume, goal["competencies"])
+    parts = ["# 최종 목표에서 역산한 커리어 경로 초안",
+             f"최종 목표: {goal['final_goal']}", f"우선 분야: {goal['preferred_domain']}",
+             f"다른 스포츠 분야 허용: {'예' if goal.get('allow_other_sports') else '아니요'}",
+             "이 초안은 설정된 경로와 이력서 키워드 근거를 연결합니다. 직함만으로 보유 역량을 추정하지 않으며, "
+             "언급된 기술의 숙련도·실무 성과·현재 공고의 필수 요건은 별도 확인해야 합니다. "
+             "경로의 성공 가능성이나 소요 연수를 예측하지 않습니다."]
+    if not resume.strip():
+        parts.append("**이력서 미입력: 아래는 개인별 순위가 없는 후보 경로입니다.**")
+    parts.append("## 현재 이력서에서 확인할 근거")
+    for item in evidence:
+        parts.append(f"### {item['name']} — {item['status']}")
+        for line in item["evidence"]:
+            parts.append(f"> {line.replace(chr(10), ' ')}")
+        parts.append(f"다음 검증 기준: {item['checkpoint']}")
+    parts.append("## 최종 목표로 이어지는 후보 경로")
+    for route in goal["routes"]:
+        parts.append(f"### {route['name']}\n\n{' → '.join(route['stages'])}")
+        parts.append(f"선택할 때 확인할 조건: {route['condition']}")
+        parts.append(f"다음 단계로 넘어갈 근거: {route['checkpoint']}")
+        parts.append(f"경로의 한계: {route['limitation']}")
+    parts.append("## 다음 공고를 검토할 기준")
+    parts.append("1. 지금 이력서로 충족하는 필수 요건과 미확인 요건을 분리합니다.\n"
+                 "2. 실제 업무가 데이터 정제·분석·시각화·모델 검증 경험을 주는지 확인합니다.\n"
+                 "3. 스포츠 조직에 있다는 사실과 경기·선수·전략 분석을 한다는 사실을 구분합니다.\n"
+                 "4. 목표와 연결되는 경험을 만들 수 있는 공고를 우선 검토하되, 연결이 약한 공고도 숨기지 않습니다.\n"
+                 "5. 학위·졸업 시기·근무지·비자·언어 요건과 실제 지원 가능 여부를 확인합니다.")
+    parts.append("## 추가로 필요한 정보")
+    parts.append("이력서와 프로젝트별 본인 역할, 통계·수학 학습 경험, 영어 사용 경험, 해외 이주 가능 여부, "
+                 "경기력·전략 분석과 스포츠 서비스 분석 중 선호하는 업무, 목표 시점은 아직 추가 확인이 필요합니다.")
+    parts.append("## 경로 설계에 참고한 공식 자료")
+    for source in goal.get("sources", []):
+        parts.append(f"- [{source['title']}]({source['url']}) — {source['note']}")
+    return "\n\n".join(parts) + "\n"
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--goal", type=Path, default=ROOT / "career-goal.local.json")
+    parser.add_argument("--resume", type=Path, help="UTF-8 Markdown 또는 TXT 이력서")
+    parser.add_argument("--output", type=Path, default=ROOT / "data/career-roadmap.md")
+    args = parser.parse_args()
+    if args.resume and args.resume.suffix.lower() not in (".md", ".txt"):
+        parser.error("첫 버전은 Markdown/TXT 이력서를 지원합니다. PDF/DOCX 추출은 미구현입니다.")
+    goal = load_goal(args.goal)
+    resume = args.resume.read_text(encoding="utf-8") if args.resume else ""
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(roadmap(goal, resume), encoding="utf-8")
+    print(f"커리어 경로 초안 저장: {args.output}")
+
+
+if __name__ == "__main__":
+    main()

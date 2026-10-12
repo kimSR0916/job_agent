@@ -1,8 +1,9 @@
 {
   "user_id": "personal",
+  "career_goal_file": "career-goal.local.json",
   "interval_minutes": 1440,
   "sources": [{"provider": "lever", "company": "palantir"}],
-  "role_keywords": ["backend", "back-end", "백엔드", "forward deployed", "forward-deployed", "fde", "ai engineer", "ai 엔지니어", "llm", "ai agent"],
+  "role_keywords": ["backend", "back-end", "백엔드", "forward deployed", "forward-deployed", "fde", "ai engineer", "ai 엔지니어", "llm", "ai agent", "data analyst", "data scientist", "data engineer", "performance analyst", "데이터 분석", "데이터 엔지니어"],
   "level_keywords": ["intern", "인턴", "junior", "주니어", "new grad", "신입", "entry level", "early career"],
   "exclude_keywords": ["senior", "staff", "principal", "시니어", "경력 3년 이상"],
   "gmail_label": "채용",
