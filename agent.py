@@ -63,7 +63,7 @@ def collect(source):
         raise ValueError("지원하지 않는 공고 수집 제공자")
 
 
-def matches(job, config):
+def matches(job, config, goal=None):
     title = job["title"].lower()
     body = job["description"].lower()
     if any(word.lower() in title for word in config["exclude_keywords"]):
@@ -73,7 +73,9 @@ def matches(job, config):
         return False
     if re.search(r"경력\s*[3-9]\s*년\s*이상", body):
         return False
-    return (any(word.lower() in title for word in config["role_keywords"])
+    industry_candidate = (goal is not None and goal.get("role_scope") == "industry_entry"
+                          and bool(connection(job, goal)["keyword_evidence"]["domain"]))
+    return ((industry_candidate or any(word.lower() in title for word in config["role_keywords"]))
             and any(word.lower() in title for word in config["level_keywords"]))
 
 
@@ -124,7 +126,7 @@ def run(config, dry_run):
     goal = load_goal(goal_path) if goal_path and goal_path.exists() else None
     for source in config["sources"]:
         try:
-            found.extend(job for job in collect(source) if matches(job, config))
+            found.extend(job for job in collect(source) if matches(job, config, goal))
         except (RuntimeError, ValueError, KeyError, TypeError):
             print(f"수집 실패: {source['provider']} / {source['company']} (다음 실행에서 재시도)", flush=True)
     if goal:

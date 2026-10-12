@@ -9,7 +9,7 @@ class CareerTests(unittest.TestCase):
 
     def test_final_goal_not_first_role(self):
         report = career.roadmap(self.goal)
-        self.assertIn("스포츠 데이터 분석 분야에서 일하기", report)
+        self.assertIn("모터스포츠·야구·스포츠 업계에서 일하기", report)
         self.assertIn("이력서 미입력", report)
         self.assertIn("모터스포츠 → 야구 → 기타 스포츠", report)
         self.assertIn("경로의 한계", report)
@@ -19,7 +19,7 @@ class CareerTests(unittest.TestCase):
         results = career.resume_evidence("Python은 아직 배우는 중입니다.", self.goal["competencies"])
         self.assertEqual(results[0]["status"], "언급 있음 · 수준 확인 필요")
         self.assertEqual(results[0]["evidence"], ["Python은 아직 배우는 중입니다."])
-        self.assertEqual(results[1]["status"], "이력서에서 미확인")
+        self.assertEqual(next(item for item in results if item["name"] == "SQL과 데이터 모델")["status"], "이력서에서 미확인")
 
     def test_goal_connection_priorities(self):
         direct = {"company": "Sports Lab", "title": "Junior Data Analyst", "description": "Python SQL"}
@@ -35,6 +35,18 @@ class CareerTests(unittest.TestCase):
                          ["모터스포츠", "야구", "기타 스포츠"])
         mixed = {"company": "Sports Baseball Racing", "title": "Junior Data Analyst", "description": ""}
         self.assertEqual(career.connection(mixed, self.goal)["preferred_domain"], "모터스포츠")
+
+    def test_industry_entry_does_not_require_analysis(self):
+        developer = {"company": "Baseball Lab", "title": "Junior Backend Engineer", "description": "Python"}
+        analyst = {"company": "Baseball Lab", "title": "Junior Data Analyst", "description": "SQL"}
+        operations = {"company": "F1 Racing", "title": "Operations Intern", "description": "Team operations"}
+        self.assertEqual(career.connection(developer, self.goal)["priority"], career.connection(analyst, self.goal)["priority"])
+        self.assertEqual(career.connection(operations, self.goal)["category"], "희망 업계 진입 후보")
+        import agent
+        config = {"role_keywords": ["backend"], "level_keywords": ["intern", "junior"], "exclude_keywords": ["senior"]}
+        self.assertTrue(agent.matches(operations, config, self.goal))
+        operations["title"] = "Senior Operations Manager"
+        self.assertFalse(agent.matches(operations, config, self.goal))
 
 
 if __name__ == "__main__":
