@@ -1,6 +1,11 @@
 {
   "final_goal": "스포츠 데이터 분석 분야에서 일하기",
   "preferred_domain": "모터스포츠",
+  "domain_priorities": [
+    {"name": "모터스포츠", "keywords": ["motorsport", "motorsports", "formula 1", "formula one", "f1", "racing", "모터스포츠", "모터 스포츠", "레이싱"]},
+    {"name": "야구", "keywords": ["baseball", "mlb", "kbo", "야구"]},
+    {"name": "기타 스포츠", "keywords": ["sports", "sport", "football", "basketball", "tennis", "스포츠", "축구", "농구", "테니스"]}
+  ],
   "allow_other_sports": true,
   "domain_keywords": ["motorsport", "motorsports", "formula 1", "formula one", "f1", "racing", "sports", "sport", "football", "basketball", "baseball", "모터스포츠", "스포츠", "축구", "농구", "야구"],
   "analysis_keywords": ["data analyst", "data scientist", "performance analyst", "race strategy", "telemetry", "analytics", "데이터 분석", "경기 분석", "전략 분석"],

@@ -10,7 +10,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from career import connection, load_goal
+from career import connection, job_sort_key, load_goal
 
 ROOT = Path(__file__).resolve().parent
 
@@ -97,6 +97,7 @@ def enqueue(db, user, job):
 def deliver(db, user, sender):
     pending = db.execute("SELECT job_id, payload FROM jobs WHERE user_id=? AND discord_sent=0",
                          (user,)).fetchall()
+    pending.sort(key=lambda row: job_sort_key(json.loads(row[1])), reverse=True)
     for job_id, payload in pending:
         sender(json.loads(payload))
         db.execute("UPDATE jobs SET discord_sent=1 WHERE user_id=? AND job_id=?", (user, job_id))
@@ -108,7 +109,8 @@ def notify(job):
     if not webhook.startswith("https://discord.com/api/webhooks/"):
         raise RuntimeError(".env에 유효한 DISCORD_WEBHOOK_URL을 설정하세요")
     career = job.get("career_connection")
-    detail = f"\n목표 연결: {career['category']}\n{career['reason']}" if career else ""
+    detail = (f"\n분야: {career.get('preferred_domain', '미확인')}\n"
+              f"목표 연결: {career['category']}\n{career['reason']}") if career else ""
     request_json(webhook + ("&" if "?" in webhook else "?") + "wait=true", {
         "content": f"새 채용 공고 · {job['company']}\n{job['title']}\n{job['location']}\n{job['url']}{detail}"[:1900],
         "allowed_mentions": {"parse": []},
@@ -128,7 +130,7 @@ def run(config, dry_run):
     if goal:
         for job in found:
             job["career_connection"] = connection(job, goal)
-        found.sort(key=lambda job: job["career_connection"]["priority"], reverse=True)
+        found.sort(key=job_sort_key, reverse=True)
     if dry_run:
         print(json.dumps(found, ensure_ascii=False, indent=2))
         return

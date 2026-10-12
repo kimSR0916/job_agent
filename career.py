@@ -24,12 +24,27 @@ def load_goal(path):
     for field in ("domain_keywords", "analysis_keywords", "bridge_keywords", "competencies", "routes"):
         if not isinstance(goal.get(field), list) or not goal[field]:
             raise ValueError(f"{field} 설정이 필요합니다")
+    groups = goal.get("domain_priorities", [])
+    if not isinstance(groups, list) or any(not isinstance(group, dict)
+            or not isinstance(group.get("name"), str) or not group["name"].strip()
+            or not isinstance(group.get("keywords"), list) or not group["keywords"]
+            or any(not isinstance(word, str) or not word.strip() for word in group["keywords"])
+            for group in groups):
+        raise ValueError("domain_priorities에는 분야 이름과 키워드를 순서대로 입력하세요")
     return goal
 
 
 def connection(job, goal):
     text = " ".join(job.get(key, "") for key in ("company", "title", "description"))
     domain = keywords(text, goal["domain_keywords"])
+    groups = goal.get("domain_priorities", [])
+    preferred, domain_priority, domain_evidence = "분야 미확인", 0, []
+    for index, group in enumerate(groups):
+        hits = keywords(text, group["keywords"])
+        if hits:
+            preferred, domain_priority, domain_evidence = group["name"], len(groups) - index, hits
+            domain = list(dict.fromkeys(domain + hits))
+            break
     analysis = keywords(text, goal["analysis_keywords"])
     bridge = keywords(text, goal["bridge_keywords"])
     if domain and analysis:
@@ -45,7 +60,15 @@ def connection(job, goal):
         category, priority = "최종 목표 연관 미확인", 0
         reason = "현재 키워드로는 최종 목표와의 연결 근거를 찾지 못했습니다."
     return {"category": category, "priority": priority, "reason": reason,
+            "preferred_domain": preferred,
+            "domain_priority": domain_priority if priority >= 2 else 0,
+            "domain_evidence": domain_evidence,
             "keyword_evidence": {"domain": domain, "analysis": analysis, "bridge": bridge}}
+
+
+def job_sort_key(job):
+    info = job.get("career_connection", {})
+    return info.get("domain_priority", 0), info.get("priority", 0)
 
 
 def resume_evidence(resume, competencies):
@@ -63,6 +86,7 @@ def roadmap(goal, resume=""):
     evidence = resume_evidence(resume, goal["competencies"])
     parts = ["# 최종 목표에서 역산한 커리어 경로 초안",
              f"최종 목표: {goal['final_goal']}", f"우선 분야: {goal['preferred_domain']}",
+             "분야 우선순위: " + " → ".join(group["name"] for group in goal.get("domain_priorities", [])),
              f"다른 스포츠 분야 허용: {'예' if goal.get('allow_other_sports') else '아니요'}",
              "이 초안은 설정된 경로와 이력서 키워드 근거를 연결합니다. 직함만으로 보유 역량을 추정하지 않으며, "
              "언급된 기술의 숙련도·실무 성과·현재 공고의 필수 요건은 별도 확인해야 합니다. "
