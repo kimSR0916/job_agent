@@ -1,6 +1,6 @@
 # 개인용 채용 에이전트
 
-현재 구현: Lever/Greenhouse 공고 수집 → 인턴·신입·주니어 제목 및 직무 필터 → 사용자별 SQLite 기록 → 새 공고 Discord webhook 알림. 실패한 알림은 다음 실행에서 재시도합니다. 서버 응답 후 DB 기록 전 종료되면 중복 알림이 생길 수 있습니다.
+현재 구현: Lever/Greenhouse/SmartRecruiters 공고 수집 → 인턴·신입·주니어 제목 및 직무 필터 → 사용자별 SQLite 기록 → 새 공고 Discord webhook 알림. 실패한 알림은 다음 실행에서 재시도합니다. 서버 응답 후 DB 기록 전 종료되면 중복 알림이 생길 수 있습니다.
 
 현재 미구현: Gmail OAuth 및 메일 분석, Notion 동기화, Google Calendar 일정 생성·갱신, 지원 자료 생성 및 승인 후 제출. 계정 연결이나 상시 실행은 아직 설정되지 않았습니다.
 
@@ -17,7 +17,7 @@ python3 career.py --resume resumes/resume.md
 
 결과는 `data/career-roadmap.md`에 저장합니다. 이력서에 언급된 경험의 원문과 미확인 역량, 경로별 선택 조건·중간 단계·검증 기준·한계를 표시합니다. **첫 버전은 규칙과 경로 템플릿 기반 초안이며, AI가 개인별 최적 경로를 결정하는 엔진은 아직 아닙니다.** 기술이 언급됐다는 사실을 숙련도나 지원 가능성으로 해석하지 않습니다. 이력서가 없으면 후보 경로를 보여줄 뿐 개인별 순위를 정하지 않습니다. 학위·비자·경력 요건의 자동 검증과 실제 공고 기반 경로 갱신은 후속 구현이 필요합니다.
 
-공고 수집에서는 희망 업계 관련 단서가 있는 공고를 모터스포츠 → 야구 → 기타 스포츠 순으로 정렬합니다. 해당 업계 공고는 개발·분석뿐 아니라 기술 지원·운영 등도 직무 키워드 제한 없이 검토합니다. 같은 업계에서 분석 직무를 개발이나 다른 직무보다 자동 우대하지 않습니다. 그 뒤에 업계 이동을 위한 기술 경험 후보와 연관 미확인 공고를 표시합니다. 여러 분야가 함께 언급되면 우선순위가 높은 분야를 선택합니다. Discord 알림에는 분야와 목표 연결 이유를 표시하고 미전송 알림도 같은 순서로 처리합니다. 이는 키워드 근거이며 회사의 실제 사업이나 업무 범위를 확정하지 않습니다. 기존 신입·인턴·경력 제한 필터는 그대로 적용합니다. 제목에 신입·인턴 표현이 없는 공고는 여전히 누락될 수 있습니다. 개인별 직무 적합성은 아직 자동 판별하지 않습니다. 기본 수집처는 여전히 Palantir 한 곳이며 스포츠 관련 회사 보드는 별도 추가가 필요합니다.
+공고 수집에서는 희망 업계 관련 단서가 있는 공고를 모터스포츠 → 야구 → 기타 스포츠 순으로 정렬합니다. 해당 업계 공고는 개발·분석뿐 아니라 기술 지원·운영 등도 직무 키워드 제한 없이 검토합니다. 같은 업계에서 분석 직무를 개발이나 다른 직무보다 자동 우대하지 않습니다. 그 뒤에 업계 이동을 위한 기술 경험 후보와 연관 미확인 공고를 표시합니다. 여러 분야가 함께 언급되면 우선순위가 높은 분야를 선택합니다. Discord 알림에는 분야와 목표 연결 이유를 표시하고 미전송 알림도 같은 순서로 처리합니다. 이는 키워드 근거이며 회사의 실제 사업이나 업무 범위를 확정하지 않습니다. 기존 신입·인턴·경력 제한 필터는 그대로 적용합니다. 제목과 채용 형태·경력 수준 메타데이터에서 신입·인턴 여부를 확인합니다. 이 정보가 없는 신입 가능 공고는 누락될 수 있습니다. 개인별 직무 적합성은 아직 자동 판별하지 않습니다. 기본 수집처는 스포츠 관련 6곳과 기존 Palantir를 포함한 7곳입니다. 아래 공식 수집처 표를 참고하세요.
 
 ## 실행
 
@@ -39,9 +39,9 @@ python3 agent.py --loop
 
 ## 검색 범위
 
-`config.json`의 sources에 회사별 채용 보드를 추가하세요. 기본값은 Palantir Lever 보드 하나입니다. 전체 인터넷 검색이나 국내 채용 사이트 수집은 아직 구현하지 않았습니다. Greenhouse는 `{"provider":"greenhouse","company":"회사 보드 토큰"}` 형식입니다.
+`config.json`의 sources에 회사별 채용 보드를 추가하세요. 기본값은 아래 7개 공식 채용 보드입니다. 전체 인터넷 검색이나 국내 채용 사이트 수집은 아직 구현하지 않았습니다. Greenhouse는 `{"provider":"greenhouse","company":"회사 보드 토큰"}` 형식입니다.
 
-첫 필터는 키워드 방식입니다. 제목에 경력 수준이 없는 신입 가능 공고는 누락될 수 있고, 졸업 시기·비자·Python 사용 여부는 아직 판별하지 않습니다. 다음 단계에서 본문 기반 구조화와 사용자 이력 비교가 필요합니다. 지역 제한은 없습니다.
+첫 필터는 키워드 방식입니다. 제목·채용 형태·경력 수준 메타데이터에서 신입 단서를 찾을 수 없는 공고는 누락될 수 있고, 졸업 시기·비자·Python 사용 여부는 아직 판별하지 않습니다. 다음 단계에서 본문 기반 구조화와 사용자 이력 비교가 필요합니다. 지역 제한은 없습니다.
 
 ## 확정한 후속 연동 설계
 
@@ -53,3 +53,29 @@ python3 agent.py --loop
 - Gmail과 Calendar는 같은 Google 계정으로 연동할 수 있습니다. 이메일 주소만으로 연결되지 않으며, 비밀번호를 수집하지 않습니다. 토큰은 로컬 secrets 폴더에 두고 버전 관리에서 제외합니다. 서비스 확장 시 사용자별 암호화 저장·연결 해제 구현이 필요합니다.
 
 공식 문서: [Lever](https://github.com/lever/postings-api), [Greenhouse](https://docs.greenhouse.io/job-board.html), [Discord webhook](https://docs.discord.com/developers/resources/webhook), [Gmail 권한](https://developers.google.com/workspace/gmail/api/auth/scopes), [Calendar 권한](https://developers.google.com/workspace/calendar/api/auth).
+
+## 공식 수집처
+
+| 분야 | 조직 | 제공 방식 | 공식 채용 페이지 |
+|---|---|---|---|
+| 모터스포츠 | McLaren Racing | SmartRecruiters | [공식 보드](https://careers.smartrecruiters.com/McLarenRacingLtd1) |
+| 모터스포츠 | Williams Racing | SmartRecruiters | [공식 보드](https://careers.smartrecruiters.com/WilliamsRacing) |
+| 야구 | Boston Red Sox | Lever | [공식 보드](https://jobs.lever.co/redsox) |
+| 야구 | San Francisco Giants | Lever | [공식 보드](https://jobs.lever.co/sfgiants) |
+| 기타 스포츠 | The Athletic | Lever | [공식 보드](https://jobs.lever.co/theathletic) |
+| 기타 스포츠 | Kitman Labs | Lever | [공식 보드](https://jobs.lever.co/kitmanlabs) |
+| 기술 경험 후보 | Palantir | Lever | [공식 보드](https://jobs.lever.co/palantir) |
+
+모든 수집처는 로그인 없이 공개 공고를 읽습니다. `source.domain`을 공식 보드별로 지정해 공고 본문 키워드보다 수집처의 분야를 우선 사용합니다. 수집처에 분야가 없으면 기존 키워드 판별을 사용합니다. SmartRecruiters는 목록을 페이지별로 읽고, 제목·채용 형태·경력 수준에서 후보를 선별한 뒤 상세 본문의 자격 요건을 읽어 최종 필터를 적용합니다. 목록 수준에서 후보가 아닌 공고는 상세 조회를 생략합니다.
+
+```sh
+python3 verify_sources.py
+```
+
+실제 수집과 필터를 검증하고 `data/source-verification.json`에 결과를 저장합니다. Discord 전송과 지원 제출은 하지 않습니다. 2026-10-12 확인 당시 7곳 모두 수집 요청이 성공했습니다. 필터에 맞은 스포츠 공고는 McLaren 2건, The Athletic 2건이었고 다른 스포츠 보드에는 일치 공고가 없었습니다. Kitman Labs는 당시 전체 공고도 0건이었습니다. 공고 수는 이후 바뀔 수 있습니다. 이 검증은 이력서·비자·학위 조건까지 충족한다는 의미는 아닙니다.
+
+macOS Python에서 인증서 오류가 발생하는 환경을 위해 기본 TLS 검증에 시스템 루트·시스템 키체인의 인증서를 추가합니다. 인증서 검증을 끄지 않습니다. Windows/Linux는 Python 기본 신뢰 저장소를 사용합니다.
+
+현재 추가한 스포츠 보드는 해외 조직입니다. 국내 스포츠 조직과 다른 팀 전체를 포함하는 검색은 아직 구현하지 않았습니다. 설정을 추가한 것과 상시 실행을 활성화한 것은 별개이며, `.env`와 실행 환경 설정이 여전히 필요합니다.
+
+공식 API 참고: [SmartRecruiters 공개 Posting API](https://developers.smartrecruiters.com/docs/endpoints).

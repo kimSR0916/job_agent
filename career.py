@@ -40,7 +40,10 @@ def connection(job, goal):
     groups = goal.get("domain_priorities", [])
     preferred, domain_priority, domain_evidence = "분야 미확인", 0, []
     for index, group in enumerate(groups):
-        hits = keywords(text, group["keywords"])
+        explicit_domain = job.get("source_domain", "")
+        if explicit_domain and explicit_domain != group["name"]:
+            continue
+        hits = [f"수집처 설정: {explicit_domain}"] if explicit_domain else keywords(text, group["keywords"])
         if hits:
             preferred, domain_priority, domain_evidence = group["name"], len(groups) - index, hits
             domain = list(dict.fromkeys(domain + hits))

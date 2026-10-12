@@ -11,6 +11,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from career import connection, job_sort_key, load_goal
+from network import tls_context
 
 ROOT = Path(__file__).resolve().parent
 
@@ -22,7 +23,7 @@ def request_json(url, payload=None):
         "Content-Type": "application/json",
     })
     try:
-        with urllib.request.urlopen(req, timeout=30) as response:
+        with urllib.request.urlopen(req, timeout=30, context=tls_context()) as response:
             raw = response.read()
             return json.loads(raw) if raw else None
     except urllib.error.HTTPError as exc:
@@ -30,13 +31,15 @@ def request_json(url, payload=None):
         raise RuntimeError(f"외부 서비스 HTTP 오류 {exc.code}") from None
     except urllib.error.URLError:
         raise RuntimeError("외부 서비스 연결 실패") from None
+    except TimeoutError:
+        raise RuntimeError("외부 서비스 응답 시간 초과") from None
 
 
 def clean(value):
     return html.unescape(re.sub(r"<[^>]+>", " ", value or ""))
 
 
-def collect(source):
+def collect(source, config=None, goal=None):
     company = source["company"]
     slug = urllib.parse.quote(company, safe="")
     if source["provider"] == "lever":
@@ -44,9 +47,11 @@ def collect(source):
         for item in items:
             categories = item.get("categories", {})
             yield {
-                "id": f"lever:{company}:{item['id']}", "company": company,
+                "id": f"lever:{company}:{item['id']}", "company": source.get("name", company),
                 "title": item["text"], "url": item["hostedUrl"],
                 "location": categories.get("location", "미확인"),
+                "work_type": categories.get("commitment", ""),
+                "source_domain": source.get("domain", ""),
                 "description": clean(item.get("description", "")) + " " + " ".join(
                     clean(part.get("content", "")) for part in item.get("lists", [])),
             }
@@ -57,8 +62,37 @@ def collect(source):
                 "id": f"greenhouse:{company}:{item['id']}", "company": company,
                 "title": item["title"], "url": item["absolute_url"],
                 "location": item.get("location", {}).get("name", "미확인"),
+                "source_domain": source.get("domain", ""),
                 "description": clean(item.get("content", "")),
             }
+    elif source["provider"] == "smartrecruiters":
+        base = f"https://api.smartrecruiters.com/v1/companies/{slug}/postings"
+        offset, limit = 0, 100
+        while True:
+            result = request_json(f"{base}?limit={limit}&offset={offset}")
+            items = result["content"]
+            for item in items:
+                job = {
+                    "id": f"smartrecruiters:{company}:{item['id']}",
+                    "company": source.get("name", company), "title": item["name"],
+                    "source_domain": source.get("domain", ""),
+                    "work_type": item.get("typeOfEmployment", {}).get("label", ""),
+                    "experience_level": item.get("experienceLevel", {}).get("label", ""),
+                    "description": "",
+                    "location": ", ".join(str(item.get("location", {}).get(key, ""))
+                                          for key in ("city", "region", "country") if item.get("location", {}).get(key)),
+                }
+                # 목록의 직함·채용 형태로 후보를 좁혀 상세 조회 횟수를 줄입니다.
+                if config is not None and not matches(job, config, goal):
+                    continue
+                detail = request_json(f"{base}/{urllib.parse.quote(str(item['id']), safe='')}")
+                job["description"] = "\n".join(clean(section.get("text", "")) for section in
+                                                detail.get("jobAd", {}).get("sections", {}).values())
+                job["url"] = detail.get("applyUrl") or f"https://jobs.smartrecruiters.com/{slug}/{item['id']}"
+                yield job
+            offset += len(items)
+            if not items or offset >= result["totalFound"]:
+                break
     else:
         raise ValueError("지원하지 않는 공고 수집 제공자")
 
@@ -75,8 +109,9 @@ def matches(job, config, goal=None):
         return False
     industry_candidate = (goal is not None and goal.get("role_scope") == "industry_entry"
                           and bool(connection(job, goal)["keyword_evidence"]["domain"]))
+    level_text = " ".join((title, job.get("work_type", "").lower(), job.get("experience_level", "").lower()))
     return ((industry_candidate or any(word.lower() in title for word in config["role_keywords"]))
-            and any(word.lower() in title for word in config["level_keywords"]))
+            and any(word.lower() in level_text for word in config["level_keywords"]))
 
 
 def connect(path):
@@ -126,7 +161,7 @@ def run(config, dry_run):
     goal = load_goal(goal_path) if goal_path and goal_path.exists() else None
     for source in config["sources"]:
         try:
-            found.extend(job for job in collect(source) if matches(job, config, goal))
+            found.extend(job for job in collect(source, config, goal) if matches(job, config, goal))
         except (RuntimeError, ValueError, KeyError, TypeError):
             print(f"수집 실패: {source['provider']} / {source['company']} (다음 실행에서 재시도)", flush=True)
     if goal:

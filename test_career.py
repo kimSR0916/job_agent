@@ -45,6 +45,13 @@ class CareerTests(unittest.TestCase):
         import agent
         config = {"role_keywords": ["backend"], "level_keywords": ["intern", "junior"], "exclude_keywords": ["senior"]}
         self.assertTrue(agent.matches(operations, config, self.goal))
+        operations["title"] = "Operations Associate"
+        operations["work_type"] = "Associate/Co-op/Intern"
+        self.assertTrue(agent.matches(operations, config, self.goal))
+        operations["company"] = "Example"
+        operations["description"] = "Baseball benefits"
+        operations["source_domain"] = "모터스포츠"
+        self.assertEqual(career.connection(operations, self.goal)["preferred_domain"], "모터스포츠")
         operations["title"] = "Senior Operations Manager"
         self.assertFalse(agent.matches(operations, config, self.goal))
 
