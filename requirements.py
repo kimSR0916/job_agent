@@ -75,10 +75,11 @@ def brief(text, limit=100):
     return head+'…'
 
 
-def render(summary):
-    lines=['**요구사항 · 원문 발췌**']
+def render(summary, korean=False):
+    lines=['**요구사항 · 한국어 요약**' if korean else '**요구사항 · 원문 발췌**']
     for field,label in FIELDS.items():
         texts=[brief(text, 95) for text in summary[field]]
         lines.append(f'• **{label}**: '+(' / '.join(texts) if texts else '원문 확인'))
-    lines.append('영문 조건은 원문을 유지합니다. 생략된 내용은 공고 링크에서 확인해 주세요.')
+    lines.append('기계 번역 요약입니다. 정확한 자격 요건은 공고 원문에서 확인해 주세요.' if korean else
+                 '영문 조건은 원문을 유지합니다. 생략된 내용은 공고 링크에서 확인해 주세요.')
     return '\n'.join(lines)

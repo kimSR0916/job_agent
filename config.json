@@ -3,6 +3,7 @@
   "career_goal_file": "career-goal.local.json",
   "interval_minutes": 1440,
   "role_scope": "analysis_development",
+  "translation": {"enabled": true, "max_jobs_per_run": 10},
   "sources": [
     {"provider": "smartrecruiters", "company": "McLarenRacingLtd1", "name": "McLaren Racing", "domain": "모터스포츠"},
     {"provider": "smartrecruiters", "company": "WilliamsRacing", "name": "Williams Racing", "domain": "모터스포츠"},

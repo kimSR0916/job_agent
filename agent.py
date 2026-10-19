@@ -14,6 +14,7 @@ import urllib.request
 from career import connection, job_sort_key, load_goal
 from network import tls_context
 import requirements
+from translation import KoreanTranslator, TranslationBudgetReached
 
 ROOT = Path(__file__).resolve().parent
 
@@ -143,7 +144,8 @@ def enqueue(db, user, job):
     db.commit()
 
 
-def deliver(db, user, sender, config=None, goal=None):
+def deliver(db, user, sender, config=None, goal=None, translator=None):
+    translation_errors = 0
     pending = db.execute("SELECT job_id, payload FROM jobs WHERE user_id=? AND discord_sent=0",
                          (user,)).fetchall()
     pending.sort(key=lambda row: job_sort_key(json.loads(row[1])), reverse=True)
@@ -152,9 +154,21 @@ def deliver(db, user, sender, config=None, goal=None):
         if config is not None and not matches(job, config, goal):
             continue  # 복원한 과거 미전송 공고에도 현재의 직무 제한을 적용합니다.
         job["requirements_summary"] = requirements.summarize(job)
+        if translator:
+            try:
+                job["requirements_summary_ko"] = translator(job["requirements_summary"])
+            except TranslationBudgetReached as exc:
+                print(str(exc), flush=True)
+                break
+            except RuntimeError as exc:
+                translation_errors += 1
+                print(f"번역 보류: {job_id} · {exc}", flush=True)
+                continue
         sender(job)
         db.execute("UPDATE jobs SET discord_sent=1 WHERE user_id=? AND job_id=?", (user, job_id))
         db.commit()
+    if translation_errors:
+        raise RuntimeError(f"{translation_errors}개 공고의 번역을 확인하지 못해 전송을 보류했습니다")
 
 
 def notify(job):
@@ -163,7 +177,10 @@ def notify(job):
         raise RuntimeError(".env에 유효한 DISCORD_WEBHOOK_URL을 설정하세요")
     career = job.get("career_connection")
     detail = f"\n분야: {career.get('preferred_domain', '미확인')}" if career else ""
-    summary = requirements.render(job.get("requirements_summary") or requirements.summarize(job))
+    translated = job.get("requirements_summary_ko")
+    summary = requirements.render(translated if translated is not None else
+                                  job.get("requirements_summary") or requirements.summarize(job),
+                                  korean=translated is not None)
     label = "알림 형식 미리보기" if job.get("preview") else "새 채용 공고"
     request_json(webhook + ("&" if "?" in webhook else "?") + "wait=true", {
         "content": f"**{label} · {job['company']}**\n{job['title']}\n{job['location']}\n{job['url']}{detail}\n\n{summary}"[:1900],
@@ -200,17 +217,22 @@ def run(config, dry_run, preview=False):
         if not found:
             raise RuntimeError("현재 필터에 맞는 미리보기 공고가 없습니다")
         job = dict(found[0], preview=True)
-        notify(job)
+        (ROOT / "data").mkdir(exist_ok=True)
+        with closing(connect(ROOT / "data/jobs.sqlite3")) as db:
+            if config.get("translation", {}).get("enabled"):
+                job["requirements_summary_ko"] = KoreanTranslator(db, config["translation"])(requirements.summarize(job))
+            notify(job)
         print("요구사항이 포함된 알림 미리보기 1건 전송 완료", flush=True)
         if errors:
             raise RuntimeError("일부 수집처 조회는 실패했습니다")
         return
     (ROOT / "data").mkdir(exist_ok=True)
     with closing(connect(ROOT / "data/jobs.sqlite3")) as db:
+        translator = KoreanTranslator(db,config["translation"]) if config.get("translation", {}).get("enabled") else None
         for job in found:
             enqueue(db, config["user_id"], job)
         try:
-            deliver(db, config["user_id"], notify, config, goal)
+            deliver(db, config["user_id"], notify, config, goal, translator)
         except RuntimeError as exc:
             errors.append("Discord 전송 실패")
             print(f"알림 실패: {exc}. 미전송 공고는 다음 실행에서 재시도합니다.", flush=True)
