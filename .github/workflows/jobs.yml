@@ -1,0 +1,84 @@
+name: Job agent daily
+
+on:
+  schedule:
+    - cron: '17 0 * * *' # 매일 한국 시간 09:17 (GitHub 상황에 따라 지연 가능)
+  workflow_dispatch:
+    inputs:
+      initialize_state:
+        description: '최초 실행만 체크. 복원 기록이 없으면 빈 기록으로 시작하며 기존 공고가 다시 알림될 수 있습니다.'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: job-agent-production
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate notification secret
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          python - <<'PY'
+          import os
+          if not os.environ.get('DISCORD_WEBHOOK_URL', '').startswith('https://discord.com/api/webhooks/'):
+              raise SystemExit('Repository Secret DISCORD_WEBHOOK_URL을 설정하세요.')
+          PY
+      - name: Run offline checks
+        run: |
+          python -m unittest -v
+          node --test test_workflow.cjs
+      - name: Restore latest durable state
+        id: restore
+        uses: actions/github-script@v8
+        env:
+          INITIALIZE_STATE: ${{ inputs.initialize_state || false }}
+        with:
+          script: |
+            await require('./.github/scripts/restore-state.cjs')({github, context, core});
+      - name: Prepare SQLite state
+        id: state
+        env:
+          RESTORED: ${{ steps.restore.outputs.restored }}
+        run: |
+          if [ "$RESTORED" = 'true' ]; then
+            python cloud_state.py --archive "$RUNNER_TEMP/job-agent-state.zip"
+          else
+            python cloud_state.py --initialize
+          fi
+      - name: Mark attempt before sending
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-agent-attempt-v1-${{ github.run_attempt }}
+          path: config.json
+          retention-days: 90
+          if-no-files-found: error
+      - name: Collect and notify
+        id: collect
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          PYTHONUNBUFFERED: '1'
+        run: python agent.py
+      - name: Preserve latest state even on delivery failure
+        if: always() && steps.state.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-agent-state-v1-${{ github.run_attempt }}
+          path: data/jobs.sqlite3
+          retention-days: 90
+          if-no-files-found: error

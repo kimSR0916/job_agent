@@ -1,5 +1,6 @@
 """개인용 공고 수집 및 Discord 알림. Python 표준 라이브러리만 사용."""
 import argparse
+from contextlib import closing
 import html
 import json
 import os
@@ -156,13 +157,17 @@ def notify(job):
 
 def run(config, dry_run):
     found = []
+    errors = []
     goal_file = config.get("career_goal_file")
     goal_path = ROOT / goal_file if goal_file else None
+    if goal_path and not goal_path.exists():
+        goal_path = ROOT / "career-goal.example.json"
     goal = load_goal(goal_path) if goal_path and goal_path.exists() else None
     for source in config["sources"]:
         try:
             found.extend(job for job in collect(source, config, goal) if matches(job, config, goal))
         except (RuntimeError, ValueError, KeyError, TypeError):
+            errors.append("공고 수집 실패")
             print(f"수집 실패: {source['provider']} / {source['company']} (다음 실행에서 재시도)", flush=True)
     if goal:
         for job in found:
@@ -172,14 +177,17 @@ def run(config, dry_run):
         print(json.dumps(found, ensure_ascii=False, indent=2))
         return
     (ROOT / "data").mkdir(exist_ok=True)
-    with connect(ROOT / "data/jobs.sqlite3") as db:
+    with closing(connect(ROOT / "data/jobs.sqlite3")) as db:
         for job in found:
             enqueue(db, config["user_id"], job)
         try:
             deliver(db, config["user_id"], notify)
         except RuntimeError as exc:
+            errors.append("Discord 전송 실패")
             print(f"알림 실패: {exc}. 미전송 공고는 다음 실행에서 재시도합니다.", flush=True)
     print(f"이번 실행 조건 일치 공고: {len(found)}건", flush=True)
+    if errors:
+        raise RuntimeError("일부 수집 또는 알림에 실패했습니다. 저장된 기록을 보존하며 다음 실행에서 재시도합니다")
 
 
 def main():
@@ -196,8 +204,15 @@ def main():
     config = json.loads((ROOT / "config.json").read_text())
     if config["interval_minutes"] <= 0:
         parser.error("interval_minutes는 양수여야 합니다")
+    if not args.dry_run and not os.environ.get("DISCORD_WEBHOOK_URL", "").startswith("https://discord.com/api/webhooks/"):
+        parser.error("DISCORD_WEBHOOK_URL이 필요합니다. 로컬 .env 또는 GitHub Actions Secret에 설정하세요")
     while True:
-        run(config, args.dry_run)
+        try:
+            run(config, args.dry_run)
+        except RuntimeError as exc:
+            print(str(exc), flush=True)
+            if not args.loop:
+                raise SystemExit(1) from None
         if not args.loop:
             break
         time.sleep(config["interval_minutes"] * 60)

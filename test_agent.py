@@ -1,4 +1,5 @@
 import tempfile
+from contextlib import closing
 import unittest
 from pathlib import Path
 import agent
@@ -35,7 +36,7 @@ class AgentTests(unittest.TestCase):
 
     def test_delivery_retry_and_user_isolation(self):
         with tempfile.TemporaryDirectory() as directory:
-            with agent.connect(Path(directory) / "jobs.db") as db:
+            with closing(agent.connect(Path(directory) / "jobs.db")) as db:
                 job = {"id": "1", "title": "AI Intern"}
                 agent.enqueue(db, "alice", job)
                 agent.enqueue(db, "alice", job)

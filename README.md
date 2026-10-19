@@ -2,7 +2,31 @@
 
 현재 구현: Lever/Greenhouse/SmartRecruiters 공고 수집 → 인턴·신입·주니어 제목 및 직무 필터 → 사용자별 SQLite 기록 → 새 공고 Discord webhook 알림. 실패한 알림은 다음 실행에서 재시도합니다. 서버 응답 후 DB 기록 전 종료되면 중복 알림이 생길 수 있습니다.
 
-현재 미구현: Gmail OAuth 및 메일 분석, Notion 동기화, Google Calendar 일정 생성·갱신, 지원 자료 생성 및 승인 후 제출. 계정 연결이나 상시 실행은 아직 설정되지 않았습니다.
+현재 미구현: Gmail OAuth 및 메일 분석, Notion 동기화, Google Calendar 일정 생성·갱신, 지원 자료 생성 및 승인 후 제출. GitHub Actions 예약 실행 설정을 포함하며, 배포 후 Discord Secret과 최초 실행 설정이 필요합니다.
+
+## GitHub Actions에서 매일 실행
+
+이 `job-agent` 폴더 자체를 GitHub 저장소 루트로 올립니다. `.github/workflows/jobs.yml`이 기본 브랜치에 있어야 합니다. learning-agent나 개인 이력서는 올릴 필요가 없습니다.
+
+1. 저장소 **Settings → Secrets and variables → Actions → New repository secret**에서 `DISCORD_WEBHOOK_URL`을 등록합니다. 값은 Discord 알림 채널의 웹후크 URL입니다. 코드나 채팅에 붙여 넣지 않습니다.
+2. **Actions → Job agent daily → Run workflow**에서 최초 1회만 `initialize_state`를 체크합니다. 처음에는 현재 조건에 맞는 공고도 새 공고로 알립니다.
+3. 실행 결과와 Discord 수신을 확인합니다. 이후에는 매일 한국 시간 **09:17**에 실행되며 맥북을 켜둘 필요가 없습니다. 다시 수동 실행할 때는 체크를 해제합니다.
+
+GitHub 예약 실행은 정각 실행을 보장하지 않으며 지연될 수 있습니다. 공개 저장소는 장기간 활동이 없으면 예약 실행이 비활성화될 수 있습니다. [GitHub 예약 실행 안내](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)
+
+공고와 전송 여부는 SQLite로 기록하고 매 실행의 `job-agent-state-v1` 아티팩트에 90일 보존합니다. 직전 실행이 실패해도 기록을 저장하며 다음 실행에서 미전송 공고만 재시도합니다. 동시에 여러 작업이 알림을 보내지 않도록 실행을 직렬화합니다. 최신 기록이 만료·손상·유실되면 중복 알림 방지를 위해 자동 실행을 실패 처리합니다. 오래 중단한 뒤에는 아티팩트에서 기록을 복구하거나, 재알림 가능성을 확인한 후 `initialize_state`를 체크해 빈 기록으로 재시작할 수 있습니다. [아티팩트 보관 안내](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts)
+
+Discord 전송 성공 직후 기록을 저장하기 전에 프로세스가 종료되거나, 최종 아티팩트 업로드가 실패하면 자동으로 안전하게 재전송 여부를 확정할 수 없습니다. 이 경우 실행 로그와 Discord 채널을 확인해야 합니다. 서버 실행이 실제로 켜졌다는 확인은 GitHub 실행 성공과 채널 수신 검증 이후에 가능합니다.
+
+클라우드에는 개인 `career-goal.local.json`이 없으므로 버전 관리된 `career-goal.example.json`을 사용합니다. 기본 목표는 모터스포츠 → 야구 → 기타 스포츠 업계 진입입니다. 변경하려면 예제 설정을 수정하거나 개인 파일을 별도로 배포해야 합니다.
+
+로컬 검증:
+
+```sh
+python3 -m unittest -v
+node --test test_workflow.cjs
+python3 verify_sources.py
+```
 
 ## 최종 목표를 기준으로 커리어 경로 검토
 
