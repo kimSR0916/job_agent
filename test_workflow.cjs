@@ -63,3 +63,26 @@ test('latest saved state is downloaded for Python SQLite validation', async () =
     fs.rmSync(folder,{recursive:true});
   }
 });
+
+test('artifact IDs do not define chronology; matching saved attempt restores normally', async () => {
+  const folder=fs.mkdtempSync(path.join(os.tmpdir(),'job-agent-test-'));
+  const previous=process.env.RUNNER_TEMP;
+  try {
+    process.env.INITIALIZE_STATE='false';
+    process.env.RUNNER_TEMP=folder;
+    const f=fixture([
+      {id:200,name:'job-agent-attempt-v1-1',expired:false},
+      {id:100,name:'job-agent-state-v1-1',expired:false},
+    ]);
+    f.github.rest.actions.downloadArtifact=async args => {
+      assert.equal(args.artifact_id,100);
+      return {data:Buffer.from('state')};
+    };
+    await restore(f);
+    assert.equal(f.outputs.restored,'true');
+  } finally {
+    if(previous===undefined) delete process.env.RUNNER_TEMP;
+    else process.env.RUNNER_TEMP=previous;
+    fs.rmSync(folder,{recursive:true});
+  }
+});

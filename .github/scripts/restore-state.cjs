@@ -13,13 +13,14 @@ for (const run of runs) {
       !['schedule', 'workflow_dispatch'].includes(run.event)) continue;
   const {data} = await github.rest.actions.listWorkflowRunArtifacts({...repo, run_id: run.id, per_page: 100});
   const eligible = data.artifacts.filter(a => run.id !== context.runId || Number(a.name.split('-').at(-1)) < attempt);
+  const artifactAttempt = artifact => Number(artifact.name.match(/-(\d+)$/)?.[1] || '1');
   const states = eligible.filter(a => /^job-agent-state-v1(?:-\d+)?$/.test(a.name));
-  states.sort((a, b) => b.id - a.id);
+  states.sort((a, b) => artifactAttempt(b) - artifactAttempt(a));
   const state = states[0];
   const latestAttempt = eligible.filter(a => /^job-agent-attempt-v1(?:-\d+)?$/.test(a.name))
-    .sort((a,b) => b.id - a.id)[0];
+    .sort((a,b) => artifactAttempt(b) - artifactAttempt(a))[0];
   // 더 최근에 전송을 시도했는데 저장된 결과가 없으면 오래된 상태로 돌아가지 않습니다.
-  const unsavedAttempt = latestAttempt && (!state || latestAttempt.id > state.id);
+  const unsavedAttempt = latestAttempt && (!state || artifactAttempt(latestAttempt) > artifactAttempt(state));
   if (state && !state.expired && !unsavedAttempt) {
     const zip = await github.rest.actions.downloadArtifact({...repo, artifact_id: state.id, archive_format: 'zip'});
     fs.writeFileSync(path.join(process.env.RUNNER_TEMP, 'job-agent-state.zip'), Buffer.from(zip.data));
