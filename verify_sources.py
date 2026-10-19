@@ -9,6 +9,7 @@ import agent
 def main():
     config = json.loads((agent.ROOT / "config.json").read_text())
     goal = agent.load_goal(agent.ROOT / config["career_goal_file"])
+    goal["role_scope"] = config.get("role_scope",goal.get("role_scope"))
     def check(source):
         try:
             jobs = list(agent.collect(source, config, goal))
@@ -17,6 +18,7 @@ def main():
                     "status": "ok", "collected": len(jobs), "matched": len(matches),
                     "note": "SmartRecruiters는 목록에서 신입 후보를 선별한 뒤 상세 본문을 조회합니다.",
                     "jobs": [{"title": job["title"], "url": job["url"], "location": job["location"],
+                              "requirements_summary": agent.requirements.summarize(job),
                               "career_connection": agent.connection(job, goal)} for job in matches]}
         except (RuntimeError, KeyError, ValueError, TypeError) as exc:
             return {"company": source.get("name", source["company"]), "status": "error", "error": str(exc)}

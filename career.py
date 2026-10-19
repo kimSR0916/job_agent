@@ -50,7 +50,10 @@ def connection(job, goal):
             break
     analysis = keywords(text, goal["analysis_keywords"])
     bridge = keywords(text, goal["bridge_keywords"])
-    if domain and goal.get("role_scope") == "industry_entry":
+    if domain and goal.get("role_scope") == "analysis_development":
+        category, priority = "희망 업계 분석·개발 후보", 3
+        reason = "희망 업계의 분석·개발 직무 후보입니다. 이력서와 공고의 필수 요건을 비교해야 합니다."
+    elif domain and goal.get("role_scope") == "industry_entry":
         category, priority = "희망 업계 진입 후보", 3
         reason = "희망 업계 관련 표현이 있습니다. 직무를 분석·개발로 제한하지 않으며 이력서와 필수 요건을 비교해야 합니다."
     elif domain and analysis:

@@ -13,6 +13,7 @@ import urllib.parse
 import urllib.request
 from career import connection, job_sort_key, load_goal
 from network import tls_context
+import requirements
 
 ROOT = Path(__file__).resolve().parent
 
@@ -47,14 +48,18 @@ def collect(source, config=None, goal=None):
         items = request_json(f"https://api.lever.co/v0/postings/{slug}?mode=json")
         for item in items:
             categories = item.get("categories", {})
+            sections = [{"heading":"Description", "text":item.get("description", "")}]
+            sections.extend({"heading":part.get("text", ""), "text":part.get("content", "")}
+                            for part in item.get("lists", []))
+            sections.append({"heading":"Additional information", "text":item.get("additional", "")})
             yield {
                 "id": f"lever:{company}:{item['id']}", "company": source.get("name", company),
                 "title": item["text"], "url": item["hostedUrl"],
                 "location": categories.get("location", "미확인"),
                 "work_type": categories.get("commitment", ""),
                 "source_domain": source.get("domain", ""),
-                "description": clean(item.get("description", "")) + " " + " ".join(
-                    clean(part.get("content", "")) for part in item.get("lists", [])),
+                "sections": sections,
+                "description": "\n".join(requirements.plain(part["text"]) for part in sections),
             }
     elif source["provider"] == "greenhouse":
         result = request_json(f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true")
@@ -65,6 +70,7 @@ def collect(source, config=None, goal=None):
                 "location": item.get("location", {}).get("name", "미확인"),
                 "source_domain": source.get("domain", ""),
                 "description": clean(item.get("content", "")),
+                "sections": [{"heading":"", "text":item.get("content", "")}],
             }
     elif source["provider"] == "smartrecruiters":
         base = f"https://api.smartrecruiters.com/v1/companies/{slug}/postings"
@@ -87,8 +93,11 @@ def collect(source, config=None, goal=None):
                 if config is not None and not matches(job, config, goal):
                     continue
                 detail = request_json(f"{base}/{urllib.parse.quote(str(item['id']), safe='')}")
-                job["description"] = "\n".join(clean(section.get("text", "")) for section in
-                                                detail.get("jobAd", {}).get("sections", {}).values())
+                titles={"jobDescription":"Job description", "qualifications":"Qualifications",
+                        "additionalInformation":"Additional information"}
+                job["sections"] = [{"heading":section.get("title") or titles.get(key,key), "text":section.get("text", "")}
+                                   for key,section in detail.get("jobAd", {}).get("sections", {}).items()]
+                job["description"] = "\n".join(clean(section["text"]) for section in job["sections"])
                 job["url"] = detail.get("applyUrl") or f"https://jobs.smartrecruiters.com/{slug}/{item['id']}"
                 yield job
             offset += len(items)
@@ -103,15 +112,17 @@ def matches(job, config, goal=None):
     body = job["description"].lower()
     if any(word.lower() in title for word in config["exclude_keywords"]):
         return False
+    if any(re.search(r'(?<!\w)' + re.escape(word.lower()) + r'(?!\w)', title)
+           for word in config.get("exclude_role_keywords", [])):
+        return False
     # 학위 우대 조건을 경력 제한으로 오인하지 않도록 'experience/경력'에 한정.
     if re.search(r"\b(?:[3-9]|\d{2,})\+?\s*years?\s+(?:of\s+)?(?:\w+\s+){0,4}experience", body):
         return False
     if re.search(r"경력\s*[3-9]\s*년\s*이상", body):
         return False
-    industry_candidate = (goal is not None and goal.get("role_scope") == "industry_entry"
-                          and bool(connection(job, goal)["keyword_evidence"]["domain"]))
     level_text = " ".join((title, job.get("work_type", "").lower(), job.get("experience_level", "").lower()))
-    return ((industry_candidate or any(word.lower() in title for word in config["role_keywords"]))
+    return (any(re.search(r'(?<![a-z0-9_])' + re.escape(word.lower()) + r'(?![a-z0-9_])', title)
+                if word.isascii() else word.lower() in title for word in config["role_keywords"])
             and any(word.lower() in level_text for word in config["level_keywords"]))
 
 
@@ -132,12 +143,16 @@ def enqueue(db, user, job):
     db.commit()
 
 
-def deliver(db, user, sender):
+def deliver(db, user, sender, config=None, goal=None):
     pending = db.execute("SELECT job_id, payload FROM jobs WHERE user_id=? AND discord_sent=0",
                          (user,)).fetchall()
     pending.sort(key=lambda row: job_sort_key(json.loads(row[1])), reverse=True)
     for job_id, payload in pending:
-        sender(json.loads(payload))
+        job = json.loads(payload)
+        if config is not None and not matches(job, config, goal):
+            continue  # 복원한 과거 미전송 공고에도 현재의 직무 제한을 적용합니다.
+        job["requirements_summary"] = requirements.summarize(job)
+        sender(job)
         db.execute("UPDATE jobs SET discord_sent=1 WHERE user_id=? AND job_id=?", (user, job_id))
         db.commit()
 
@@ -147,15 +162,16 @@ def notify(job):
     if not webhook.startswith("https://discord.com/api/webhooks/"):
         raise RuntimeError(".env에 유효한 DISCORD_WEBHOOK_URL을 설정하세요")
     career = job.get("career_connection")
-    detail = (f"\n분야: {career.get('preferred_domain', '미확인')}\n"
-              f"목표 연결: {career['category']}\n{career['reason']}") if career else ""
+    detail = f"\n분야: {career.get('preferred_domain', '미확인')}" if career else ""
+    summary = requirements.render(job.get("requirements_summary") or requirements.summarize(job))
+    label = "알림 형식 미리보기" if job.get("preview") else "새 채용 공고"
     request_json(webhook + ("&" if "?" in webhook else "?") + "wait=true", {
-        "content": f"새 채용 공고 · {job['company']}\n{job['title']}\n{job['location']}\n{job['url']}{detail}"[:1900],
+        "content": f"**{label} · {job['company']}**\n{job['title']}\n{job['location']}\n{job['url']}{detail}\n\n{summary}"[:1900],
         "allowed_mentions": {"parse": []},
     })
 
 
-def run(config, dry_run):
+def run(config, dry_run, preview=False):
     found = []
     errors = []
     goal_file = config.get("career_goal_file")
@@ -163,6 +179,8 @@ def run(config, dry_run):
     if goal_path and not goal_path.exists():
         goal_path = ROOT / "career-goal.example.json"
     goal = load_goal(goal_path) if goal_path and goal_path.exists() else None
+    if goal and config.get("role_scope"):
+        goal["role_scope"] = config["role_scope"]
     for source in config["sources"]:
         try:
             found.extend(job for job in collect(source, config, goal) if matches(job, config, goal))
@@ -174,14 +192,25 @@ def run(config, dry_run):
             job["career_connection"] = connection(job, goal)
         found.sort(key=job_sort_key, reverse=True)
     if dry_run:
+        for job in found:
+            job["requirements_summary"] = requirements.summarize(job)
         print(json.dumps(found, ensure_ascii=False, indent=2))
+        return
+    if preview:
+        if not found:
+            raise RuntimeError("현재 필터에 맞는 미리보기 공고가 없습니다")
+        job = dict(found[0], preview=True)
+        notify(job)
+        print("요구사항이 포함된 알림 미리보기 1건 전송 완료", flush=True)
+        if errors:
+            raise RuntimeError("일부 수집처 조회는 실패했습니다")
         return
     (ROOT / "data").mkdir(exist_ok=True)
     with closing(connect(ROOT / "data/jobs.sqlite3")) as db:
         for job in found:
             enqueue(db, config["user_id"], job)
         try:
-            deliver(db, config["user_id"], notify)
+            deliver(db, config["user_id"], notify, config, goal)
         except RuntimeError as exc:
             errors.append("Discord 전송 실패")
             print(f"알림 실패: {exc}. 미전송 공고는 다음 실행에서 재시도합니다.", flush=True)
@@ -194,7 +223,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true", help="외부 전송 및 DB 저장 없이 공고 미리보기")
     parser.add_argument("--loop", action="store_true", help="프로세스가 실행되는 동안 주기적으로 수집")
+    parser.add_argument("--preview-notification", action="store_true", help="일치 공고 1건을 미리보기로 전송하며 전송 기록은 변경하지 않습니다")
     args = parser.parse_args()
+    if args.preview_notification and (args.dry_run or args.loop):
+        parser.error("--preview-notification은 --dry-run 또는 --loop와 함께 사용할 수 없습니다")
     env = ROOT / ".env"
     if env.exists():
         for line in env.read_text().splitlines():
@@ -208,7 +240,7 @@ def main():
         parser.error("DISCORD_WEBHOOK_URL이 필요합니다. 로컬 .env 또는 GitHub Actions Secret에 설정하세요")
     while True:
         try:
-            run(config, args.dry_run)
+            run(config, args.dry_run, preview=args.preview_notification)
         except RuntimeError as exc:
             print(str(exc), flush=True)
             if not args.loop:

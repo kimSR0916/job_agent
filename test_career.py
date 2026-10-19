@@ -36,18 +36,18 @@ class CareerTests(unittest.TestCase):
         mixed = {"company": "Sports Baseball Racing", "title": "Junior Data Analyst", "description": ""}
         self.assertEqual(career.connection(mixed, self.goal)["preferred_domain"], "모터스포츠")
 
-    def test_industry_entry_does_not_require_analysis(self):
+    def test_industry_does_not_bypass_analysis_development_filter(self):
         developer = {"company": "Baseball Lab", "title": "Junior Backend Engineer", "description": "Python"}
         analyst = {"company": "Baseball Lab", "title": "Junior Data Analyst", "description": "SQL"}
         operations = {"company": "F1 Racing", "title": "Operations Intern", "description": "Team operations"}
         self.assertEqual(career.connection(developer, self.goal)["priority"], career.connection(analyst, self.goal)["priority"])
-        self.assertEqual(career.connection(operations, self.goal)["category"], "희망 업계 진입 후보")
+        self.assertEqual(career.connection(developer, self.goal)["category"], "희망 업계 분석·개발 후보")
         import agent
         config = {"role_keywords": ["backend"], "level_keywords": ["intern", "junior"], "exclude_keywords": ["senior"]}
-        self.assertTrue(agent.matches(operations, config, self.goal))
+        self.assertFalse(agent.matches(operations, config, self.goal))
         operations["title"] = "Operations Associate"
         operations["work_type"] = "Associate/Co-op/Intern"
-        self.assertTrue(agent.matches(operations, config, self.goal))
+        self.assertFalse(agent.matches(operations, config, self.goal))
         operations["company"] = "Example"
         operations["description"] = "Baseball benefits"
         operations["source_domain"] = "모터스포츠"
